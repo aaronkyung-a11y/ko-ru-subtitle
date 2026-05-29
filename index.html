@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>실시간 동시통역 자막 · Синхронные субтитры</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;700;900&family=Unbounded:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#07090f; --bg-grad-1:#10151f;
+    --ko-accent:#5eead4; --ru-accent:#fca5a5;
+    --ko-glow:rgba(94,234,212,0.22); --ru-glow:rgba(252,165,165,0.22);
+    --panel:rgba(255,255,255,0.04); --panel-border:rgba(255,255,255,0.09);
+    --text-dim:rgba(255,255,255,0.42); --text:#f4f6fb;
+    --font-display:'Unbounded',sans-serif; --font-ko:'Noto Sans KR',sans-serif; --font-soft:'Gowun Dodum',sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
+  body {
+    background:radial-gradient(120% 80% at 12% 0%, var(--bg-grad-1) 0%, var(--bg) 55%), var(--bg);
+    color:var(--text); font-family:var(--font-soft);
+    min-height:100dvh; display:flex; flex-direction:column; overflow:hidden; position:relative;
+  }
+  body::after {
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:.035; z-index:99;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  header { padding:16px 20px 12px; display:flex; align-items:center; justify-content:space-between; gap:12px;
+    border-bottom:1px solid var(--panel-border); flex-shrink:0; }
+  .brand { font-family:var(--font-display); font-weight:800; font-size:14px; letter-spacing:.4px;
+    line-height:1.2; display:flex; align-items:center; gap:10px; }
+  .brand .dot { width:9px; height:9px; border-radius:50%; background:var(--text-dim); flex-shrink:0; transition:.3s; }
+  .brand .dot.ko { background:var(--ko-accent); animation:pulse 1.4s infinite; }
+  .brand .dot.ru { background:var(--ru-accent); animation:pulse 1.4s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 currentColor;} 70%{box-shadow:0 0 0 11px transparent;} 100%{box-shadow:0 0 0 0 transparent;} }
+
+  .header-actions { display:flex; align-items:center; gap:8px; }
+  .icon-btn { background:var(--panel); border:1px solid var(--panel-border); color:var(--text-dim);
+    border-radius:11px; padding:8px 12px; font-family:var(--font-display); font-size:11px;
+    font-weight:600; letter-spacing:.5px; cursor:pointer; transition:.2s; }
+  .icon-btn:active { transform:scale(.95); }
+  .icon-btn.on { color:#07090f; background:linear-gradient(120deg,var(--ko-accent),var(--ru-accent)); border-color:transparent; }
+
+  main { flex:1; display:flex; flex-direction:column; gap:14px; padding:16px; overflow-y:auto; scroll-behavior:smooth; }
+  main::-webkit-scrollbar { width:0; }
+
+  .empty { margin:auto; text-align:center; color:var(--text-dim); max-width:340px; padding:20px; }
+  .empty .big { font-family:var(--font-display); font-size:24px; font-weight:800; line-height:1.35; margin-bottom:16px;
+    background:linear-gradient(100deg,var(--ko-accent),var(--ru-accent));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .empty p { font-size:14px; line-height:1.7; }
+  .empty .auto-badge { display:inline-block; margin-top:16px; font-family:var(--font-display); font-size:11px;
+    letter-spacing:1px; color:var(--ko-accent); border:1px solid var(--panel-border); border-radius:20px; padding:6px 14px; background:var(--panel); }
+
+  .bubble { border-radius:20px; padding:16px 18px; border:1px solid var(--panel-border);
+    background:var(--panel); backdrop-filter:blur(8px); max-width:90%;
+    animation:rise .4s cubic-bezier(.2,.8,.2,1); position:relative; }
+  @keyframes rise { from{opacity:0; transform:translateY(14px) scale(.98);} to{opacity:1; transform:none;} }
+  .bubble.ko { align-self:flex-start; border-left:3px solid var(--ko-accent); box-shadow:-8px 0 30px -18px var(--ko-glow); }
+  .bubble.ru { align-self:flex-end; border-right:3px solid var(--ru-accent); box-shadow:8px 0 30px -18px var(--ru-glow); }
+  .tag { font-family:var(--font-display); font-size:10px; letter-spacing:1.4px; text-transform:uppercase;
+    margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+  .bubble.ko .tag { color:var(--ko-accent); } .bubble.ru .tag { color:var(--ru-accent); }
+  .source { font-family:var(--font-ko); font-size:15px; line-height:1.55; color:var(--text-dim); margin-bottom:10px; font-weight:400; }
+  .arrow { font-size:11px; color:var(--text-dim); margin-bottom:8px; letter-spacing:.8px; }
+  .target { font-family:var(--font-ko); font-size:22px; line-height:1.5; font-weight:700; color:var(--text); }
+  .target.loading { color:var(--text-dim); font-style:italic; font-weight:400; }
+
+  .interim { align-self:center; font-family:var(--font-ko); font-size:17px; color:var(--text-dim);
+    font-style:italic; padding:4px 20px; min-height:24px; transition:opacity .2s; text-align:center; max-width:92%; }
+  .interim .lng { font-family:var(--font-display); font-size:10px; font-style:normal; letter-spacing:1px; margin-right:8px;
+    padding:2px 8px; border-radius:10px; background:var(--panel); }
+  .interim .lng.ko { color:var(--ko-accent); } .interim .lng.ru { color:var(--ru-accent); }
+
+  footer { flex-shrink:0; padding:14px 16px calc(16px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--panel-border); background:rgba(7,9,15,.6); backdrop-filter:blur(12px); }
+  .controls { display:flex; flex-direction:column; align-items:center; gap:10px; max-width:600px; margin:0 auto; }
+
+  /* listening-language switch (mobile single-engine) */
+  .lang-switch { display:flex; gap:6px; }
+  .lang-switch .seg { font-family:var(--font-display); font-size:11px; font-weight:600; letter-spacing:.5px;
+    color:var(--text-dim); border:1px solid var(--panel-border); background:var(--panel);
+    border-radius:20px; padding:6px 14px; transition:.25s; }
+  .lang-switch .seg.active.ko { color:#07090f; background:var(--ko-accent); border-color:transparent; }
+  .lang-switch .seg.active.ru { color:#07090f; background:var(--ru-accent); border-color:transparent; }
+
+  .mic { width:78px; height:78px; border-radius:50%; border:none; cursor:pointer;
+    background:linear-gradient(135deg,var(--ko-accent),var(--ru-accent)); color:#07090f;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 8px 30px -8px var(--ko-glow); transition:transform .2s, box-shadow .3s; }
+  .mic:active { transform:scale(.93); }
+  .mic.listening { background:linear-gradient(135deg,#ff5a5a,#ff8a5a); animation:micpulse 1.5s infinite; }
+  @keyframes micpulse { 0%{box-shadow:0 0 0 0 rgba(255,90,90,.45);} 70%{box-shadow:0 0 0 20px rgba(255,90,90,0);} 100%{box-shadow:0 0 0 0 rgba(255,90,90,0);} }
+  .mic svg { width:32px; height:32px; }
+  .hint { text-align:center; font-size:12.5px; color:var(--text-dim); min-height:18px; letter-spacing:.3px; line-height:1.5; }
+  .err { color:var(--ru-accent); }
+
+  body.stage main { padding:0; }
+  body.stage .bubble:not(:last-child){ display:none; }
+  body.stage .bubble { max-width:100%; width:100%; border:none; background:transparent; box-shadow:none;
+    margin:auto; padding:30px 26px; text-align:center; align-self:center !important; animation:fadeStage .4s ease; }
+  @keyframes fadeStage { from{opacity:0;} to{opacity:1;} }
+  body.stage .bubble .tag { justify-content:center; font-size:13px; margin-bottom:16px; }
+  body.stage .bubble .source { font-size:clamp(18px,4vw,28px); margin-bottom:20px; }
+  body.stage .bubble .arrow { font-size:13px; margin-bottom:18px; }
+  body.stage .bubble .target { font-size:clamp(30px,7vw,64px); line-height:1.4; font-weight:900; }
+  body.stage .interim { font-size:clamp(18px,4vw,30px); }
+  body.stage .empty .big { font-size:clamp(28px,6vw,56px); }
+
+  @media (max-width:380px){ .target{font-size:20px;} .mic{width:70px;height:70px;} }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="dot" id="dot"></span>
+      <span>동시통역 자막<br>Синхронный перевод</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btnStage">발표 모드</button>
+    </div>
+  </header>
+
+  <main id="feed">
+    <div class="empty" id="empty">
+      <div class="big">말하면 자동으로<br>번역됩니다</div>
+      <p>마이크 버튼을 누르고 말씀하세요.<br>듣는 언어가 자동으로 전환되며, 한국어는 러시아어로 · 러시아어는 한국어로 번역해 자막으로 표시합니다.</p>
+      <span class="auto-badge">🌐 자동 언어 전환 · Автопереключение</span>
+    </div>
+  </main>
+
+  <div class="interim" id="interim"></div>
+
+  <footer>
+    <div class="controls">
+      <div class="lang-switch" id="langSwitch">
+        <span class="seg ko active" data-l="ko" id="segKo">🇰🇷 한국어 듣는 중</span>
+        <span class="seg ru" data-l="ru" id="segRu">🇷🇺 Русский</span>
+      </div>
+      <button class="mic" id="mic" aria-label="마이크">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
+      <div class="hint" id="hint">마이크 버튼을 눌러 시작하세요</div>
+    </div>
+  </footer>
+
+<script>
+(function(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const feed=document.getElementById('feed'), empty=document.getElementById('empty');
+  const interimEl=document.getElementById('interim'), micBtn=document.getElementById('mic');
+  const hint=document.getElementById('hint'), dot=document.getElementById('dot');
+  const btnStage=document.getElementById('btnStage');
+  const segKo=document.getElementById('segKo'), segRu=document.getElementById('segRu');
+
+  let listening=false, wantOn=false, rec=null;
+  let curLang='ko';                  // language we are currently listening for
+  let lastSpeechAt=0;                // for auto-switch on silence
+  let switchTimer=null;
+  let gotResultThisRound=false;
+
+  if (!SR) {
+    hint.innerHTML='<span class="err">이 브라우저는 음성 인식을 지원하지 않습니다.<br>Chrome 또는 Edge 사용을 권장합니다.</span>';
+    micBtn.style.opacity=.4;
+    micBtn.onclick=()=>alert('음성 인식 미지원 브라우저입니다.');
+    return;
+  }
+
+  function detectLang(t){
+    const h=(t.match(/[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/g)||[]).length;
+    const c=(t.match(/[\u0400-\u04FF]/g)||[]).length;
+    if(c>h) return 'ru'; if(h>0) return 'ko'; return null;
+  }
+
+  function updateSwitchUI(){
+    segKo.classList.toggle('active', curLang==='ko');
+    segRu.classList.toggle('active', curLang==='ru');
+    dot.className = 'dot ' + (listening ? curLang : '');
+    if(listening){
+      hint.textContent = curLang==='ko'
+        ? '🇰🇷 한국어를 듣고 있습니다… 말씀하세요'
+        : '🇷🇺 Слушаю русский… говорите';
+    }
+  }
+
+  // user can tap a segment to force the listening language
+  segKo.onclick=()=>{ if(curLang!=='ko'){ curLang='ko'; restart(); } };
+  segRu.onclick=()=>{ if(curLang!=='ru'){ curLang='ru'; restart(); } };
+
+  function buildRec(){
+    const r=new SR();
+    r.lang = curLang==='ko' ? 'ko-KR' : 'ru-RU';
+    r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
+    gotResultThisRound=false;
+
+    r.onresult=(e)=>{
+      let interim='';
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        const res=e.results[i];
+        if(res.isFinal){
+          const txt=res[0].transcript.trim();
+          if(txt){ gotResultThisRound=true; lastSpeechAt=Date.now(); handleFinal(txt); }
+        } else { interim+=res[0].transcript; lastSpeechAt=Date.now(); }
+      }
+      if(interim.trim()) showInterim(interim, detectLang(interim)||curLang);
+    };
+
+    r.onerror=(e)=>{
+      if(e.error==='no-speech'||e.error==='aborted') return;
+      if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+        hint.innerHTML='<span class="err">마이크 권한이 필요합니다. https 주소에서 열고, 권한을 허용해 주세요.</span>';
+        hardStop();
+      } else if(e.error==='network'){
+        hint.innerHTML='<span class="err">음성 인식 네트워크 오류입니다.</span>';
+      }
+    };
+
+    r.onend=()=>{ if(wantOn){ try{ r.start(); }catch(_){} } };
+    return r;
+  }
+
+  function restart(){
+    if(!wantOn) { updateSwitchUI(); return; }
+    if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} }
+    rec=buildRec();
+    try{ rec.start(); }catch(_){}
+    updateSwitchUI();
+  }
+
+  // Auto-switch: if user has been silent on the current language for a while,
+  // flip to the other language so the next utterance in the other tongue is caught.
+  function startAutoSwitchLoop(){
+    clearInterval(switchTimer);
+    switchTimer=setInterval(()=>{
+      if(!listening) return;
+      const silent = Date.now()-lastSpeechAt;
+      // after 3.5s of silence, toggle listening language
+      if(silent>3500){
+        curLang = curLang==='ko' ? 'ru' : 'ko';
+        lastSpeechAt=Date.now();
+        restart();
+      }
+    },1200);
+  }
+
+  let interimTimer=null;
+  function showInterim(text,lang){
+    interimEl.innerHTML='<span class="lng '+lang+'">'+(lang==='ko'?'KO':'RU')+'</span>'+escapeHtml(text);
+    clearTimeout(interimTimer);
+    interimTimer=setTimeout(()=>{ interimEl.textContent=''; },2500);
+  }
+
+  function handleFinal(text){
+    const detected=detectLang(text)||curLang;
+    addBubble(text, detected);
+    // if detected language differs from what we're listening for, switch to it
+    if(detected!==curLang){ curLang=detected; restart(); }
+  }
+
+  function addBubble(text,srcLang){
+    if(empty&&empty.parentNode) empty.remove();
+    const tgt=srcLang==='ko'?'ru':'ko';
+    const b=document.createElement('div');
+    b.className='bubble '+srcLang;
+    b.innerHTML='<div class="tag">'+(srcLang==='ko'?'🇰🇷 한국어':'🇷🇺 Русский')+'</div>'+
+      '<div class="source">'+escapeHtml(text)+'</div>'+
+      '<div class="arrow">↓ '+(srcLang==='ko'?'러시아어 번역':'한국어 번역')+'</div>'+
+      '<div class="target loading">'+(srcLang==='ko'?'번역 중…':'Перевод…')+'</div>';
+    feed.appendChild(b); feed.scrollTop=feed.scrollHeight;
+    const tEl=b.querySelector('.target');
+    translate(text,srcLang,tgt)
+      .then(t=>{ tEl.classList.remove('loading'); tEl.textContent=t; feed.scrollTop=feed.scrollHeight; })
+      .catch(()=>{ tEl.classList.remove('loading'); tEl.innerHTML='<span class="err">번역 실패</span>'; });
+  }
+
+  async function translate(text,from,to){
+    try{
+      const u='https://translate.googleapis.com/translate_a/single?client=gtx&sl='+from+'&tl='+to+'&dt=t&q='+encodeURIComponent(text);
+      const r=await fetch(u); if(!r.ok) throw 0;
+      const d=await r.json(); const o=d[0].map(s=>s[0]).join('');
+      if(o&&o.trim()) return o; throw 0;
+    }catch(e){
+      const u2='https://api.mymemory.translated.net/get?q='+encodeURIComponent(text)+'&langpair='+from+'|'+to;
+      const r2=await fetch(u2); const d2=await r2.json();
+      if(d2&&d2.responseData&&d2.responseData.translatedText) return d2.responseData.translatedText;
+      throw new Error('fail');
+    }
+  }
+
+  async function start(){
+    try{
+      if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+        const s=await navigator.mediaDevices.getUserMedia({audio:true});
+        s.getTracks().forEach(t=>t.stop());
+      }
+    }catch(err){
+      hint.innerHTML='<span class="err">마이크 권한이 거부되었거나 https가 아닙니다.<br>https 주소에서 열고 권한을 허용해 주세요.</span>';
+      return;
+    }
+    wantOn=true; listening=true; lastSpeechAt=Date.now();
+    rec=buildRec(); try{ rec.start(); }catch(_){}
+    micBtn.classList.add('listening');
+    startAutoSwitchLoop();
+    updateSwitchUI();
+  }
+
+  function hardStop(){
+    wantOn=false; listening=false; clearInterval(switchTimer);
+    if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} } rec=null;
+    micBtn.classList.remove('listening'); dot.className='dot';
+    interimEl.textContent='';
+    if(!hint.querySelector('.err')) hint.textContent='마이크 버튼을 눌러 시작하세요';
+    segKo.classList.toggle('active', curLang==='ko'); segRu.classList.toggle('active', curLang==='ru');
+  }
+
+  micBtn.onclick=()=>{ if(listening) hardStop(); else start(); };
+
+  btnStage.onclick=()=>{
+    document.body.classList.toggle('stage');
+    const on=document.body.classList.contains('stage');
+    btnStage.classList.toggle('on',on);
+    btnStage.textContent=on?'일반 모드':'발표 모드';
+    if(on&&document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
+    else if(!on&&document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+    feed.scrollTop=feed.scrollHeight;
+  };
+
+  function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  updateSwitchUI();
+})();
+</script>
+</body>
+</html>
