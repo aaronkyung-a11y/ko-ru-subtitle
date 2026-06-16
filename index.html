@@ -206,21 +206,20 @@
     r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
 
     r.onresult=(e)=>{
-      let interim='';
-      for(let i=e.resultIndex;i<e.results.length;i++){
+      // Rebuild the FULL transcript from scratch every time.
+      // Mobile Chrome re-sends accumulated results, so appending causes
+      // duplicates ("왜 / 왜 이렇게 / 왜 이렇게 한글이 ..."). Reading all
+      // results fresh each event = always the current total, never duplicated.
+      let finalText='', interim='';
+      for(let i=0;i<e.results.length;i++){
         const res=e.results[i];
-        if(res.isFinal){
-          const t=res[0].transcript.trim();
-          if(t){ committedBuf += (committedBuf?' ':'') + t; }
-        } else {
-          interim += res[0].transcript;
-        }
+        if(res.isFinal) finalText += res[0].transcript;
+        else interim += res[0].transcript;
       }
-      lastInterim = interim.trim();
-      // show live preview = committed so far + current interim
+      committedBuf = finalText.trim();
+      lastInterim  = interim.trim();
       const preview = (committedBuf + ' ' + lastInterim).trim();
       updateListeningBar(preview);
-      // reset the silence timer on any speech activity
       armSilenceTimer();
     };
 
@@ -247,6 +246,13 @@
     updateListeningBar('');     // clear preview
     if(!text) return;
     commitBubble(text);
+    // Restart recognition so its internal results[] buffer is cleared.
+    // Otherwise the next utterance gets prepended with this sentence again.
+    if(wantOn && listening){
+      try { if(rec){ rec.onend=null; rec.stop(); } } catch(_){}
+      rec=buildRec();
+      try { rec.start(); } catch(_){}
+    }
   }
 
   function updateListeningBar(text){
