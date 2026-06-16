@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- ko-ru-subtitle  |  v0.7  |  Aaron  |  2026-06-16
+     발표 모드 지난 문장 가독성 개선(투명도 상향) -->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -99,6 +101,8 @@
   @keyframes micpulse { 0%{box-shadow:0 0 0 0 rgba(255,90,90,.45);} 70%{box-shadow:0 0 0 18px rgba(255,90,90,0);} 100%{box-shadow:0 0 0 0 rgba(255,90,90,0);} }
   .mic svg { width:28px; height:28px; }
   .hint { text-align:center; font-size:12.5px; color:var(--text-dim); min-height:18px; letter-spacing:.3px; line-height:1.5; margin-top:10px; }
+  .version { text-align:center; font-family:var(--font-display); font-size:9.5px; letter-spacing:1px;
+    color:rgba(255,255,255,0.28); margin-top:8px; user-select:none; }
   .err { color:var(--ru-accent); }
 
   /* ===== presentation mode ===== */
@@ -110,8 +114,9 @@
   body.stage .bubble .tag { font-size:12px; margin-bottom:8px; }
   body.stage .bubble .source { font-size:clamp(15px,3.5vw,22px); margin-bottom:8px; }
   body.stage .bubble .arrow { display:none; }
-  body.stage .bubble:not(:last-child) { opacity:.3; }
-  body.stage .bubble:not(:last-child) .target { font-size:clamp(20px,4.5vw,30px); font-weight:700; }
+  body.stage .bubble:not(:last-child) { opacity:.6; }
+  body.stage .bubble:nth-last-child(2) { opacity:.75; }
+  body.stage .bubble:not(:last-child) .target { font-size:clamp(22px,5vw,34px); font-weight:700; color:var(--text); }
   body.stage .bubble:not(:last-child) .source { display:none; }
   body.stage .bubble:last-child { border-left:4px solid var(--ko-accent); padding-left:18px; }
   body.stage .bubble.ru:last-child { border-left:none; border-right:4px solid var(--ru-accent); padding-right:18px; }
@@ -160,10 +165,18 @@
       </button>
     </div>
     <div class="hint" id="hint">말할 언어를 고르고 마이크를 누르세요</div>
+    <div class="version" id="version"></div>
   </footer>
 
 <script>
 (function(){
+  // ===== 버전 정보 (수정 시 이 세 줄만 갱신) =====
+  const APP_VERSION = 'v0.7';
+  const APP_AUTHOR  = 'Aaron';
+  const APP_DATE    = '2026-06-16';
+  const verEl=document.getElementById('version');
+  if(verEl) verEl.textContent = APP_VERSION + ' · ' + APP_AUTHOR + ' · ' + APP_DATE;
+
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const feed=document.getElementById('feed'), empty=document.getElementById('empty');
   const micBtn=document.getElementById('mic'), hint=document.getElementById('hint'), dot=document.getElementById('dot');
