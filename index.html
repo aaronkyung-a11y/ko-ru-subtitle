@@ -174,11 +174,11 @@
   let direction='ko-ru';
   let listening=false, wantOn=false, rec=null;
 
-  // sentence buffering
-  let committedBuf='';      // finalized fragments collected since last flush
-  let lastInterim='';       // current interim tail
+  // per-utterance handling (no cross-utterance accumulation)
+  let utterText='';         // best transcript for the CURRENT utterance only
   let silenceTimer=null;
-  const SILENCE_MS=1200;    // pause length that ends a sentence
+  let committed=false;      // guard: did we already commit this utterance?
+  const SILENCE_MS=1300;    // pause length that ends a sentence
 
   if (!SR) {
     hint.innerHTML='<span class="err">이 브라우저는 음성 인식을 지원하지 않습니다.<br>Chrome 또는 Edge 사용을 권장합니다.</span>';
@@ -189,7 +189,6 @@
 
   function setDirection(d){
     if(d===direction) return;
-    flushSentence(); // commit whatever is pending before switching
     direction=d;
     btnKoRu.classList.toggle('active', d==='ko-ru');
     btnRuKo.classList.toggle('active', d==='ru-ko');
@@ -203,23 +202,20 @@
   function buildRec(){
     const r=new SR();
     r.lang = direction==='ko-ru' ? 'ko-KR' : 'ru-RU';
-    r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
+    // NON-continuous: the engine handles one utterance, then ends on its own.
+    // This avoids the mobile-Chrome bug where continuous mode re-emits the
+    // whole accumulated transcript and produces duplicated text.
+    r.continuous=false; r.interimResults=true; r.maxAlternatives=1;
+    utterText=''; committed=false;
 
     r.onresult=(e)=>{
-      // Rebuild the FULL transcript from scratch every time.
-      // Mobile Chrome re-sends accumulated results, so appending causes
-      // duplicates ("왜 / 왜 이렇게 / 왜 이렇게 한글이 ..."). Reading all
-      // results fresh each event = always the current total, never duplicated.
-      let finalText='', interim='';
-      for(let i=0;i<e.results.length;i++){
-        const res=e.results[i];
-        if(res.isFinal) finalText += res[0].transcript;
-        else interim += res[0].transcript;
-      }
-      committedBuf = finalText.trim();
-      lastInterim  = interim.trim();
-      const preview = (committedBuf + ' ' + lastInterim).trim();
-      updateListeningBar(preview);
+      // For a single utterance, results[0] is the best current transcript.
+      let best='';
+      for(let i=0;i<e.results.length;i++) best += e.results[i][0].transcript;
+      utterText = best.trim();
+      // live preview only — DO NOT draw a bubble while speaking
+      updateListeningBar(utterText || '');
+      // safety: if engine keeps the session open after a pause, flush ourselves
       armSilenceTimer();
     };
 
@@ -229,30 +225,38 @@
         hint.innerHTML='<span class="err">마이크 권한이 필요합니다. https 주소에서 권한을 허용해 주세요.</span>'; hardStop();
       } else if(e.error==='network'){ hint.innerHTML='<span class="err">음성 인식 네트워크 오류입니다.</span>'; }
     };
-    r.onend=()=>{ if(wantOn){ try{ r.start(); }catch(_){} } };
+
+    // When the utterance naturally ends (user paused), commit it once,
+    // then start a fresh recognizer for the next sentence.
+    r.onend=()=>{
+      commitUtterance();
+      if(wantOn && listening){
+        rec=buildRec();
+        try{ rec.start(); }catch(_){}
+      }
+    };
     return r;
   }
 
   function armSilenceTimer(){
     clearTimeout(silenceTimer);
-    silenceTimer=setTimeout(()=>{ flushSentence(); }, SILENCE_MS);
+    // If the engine doesn't end by itself, stop it after a pause.
+    // Stopping triggers onend -> commitUtterance.
+    silenceTimer=setTimeout(()=>{
+      if(rec){ try{ rec.stop(); }catch(_){} }
+    }, SILENCE_MS);
   }
 
-  // commit the buffered sentence as one bubble + translate
-  function flushSentence(){
+  // commit the single current utterance as one bubble + translate
+  function commitUtterance(){
     clearTimeout(silenceTimer);
-    const text = (committedBuf + ' ' + lastInterim).trim();
-    committedBuf=''; lastInterim='';
-    updateListeningBar('');     // clear preview
+    if(committed) return;          // guard against double-commit
+    committed=true;
+    const text=utterText.trim();
+    utterText='';
+    updateListeningBar('');
     if(!text) return;
     commitBubble(text);
-    // Restart recognition so its internal results[] buffer is cleared.
-    // Otherwise the next utterance gets prepended with this sentence again.
-    if(wantOn && listening){
-      try { if(rec){ rec.onend=null; rec.stop(); } } catch(_){}
-      rec=buildRec();
-      try { rec.start(); } catch(_){}
-    }
   }
 
   function updateListeningBar(text){
@@ -297,11 +301,12 @@
   function restart(){
     if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} }
     if(!wantOn) return;
+    utterText=''; committed=false;
     rec=buildRec(); try{ rec.start(); }catch(_){}
     setListeningHint();
   }
   function setListeningHint(){
-    hint.textContent = direction==='ko-ru' ? '말하고 잠깐 멈추면 번역됩니다 🇰🇷' : 'Скажите и сделайте паузу 🇷🇺';
+    hint.textContent = direction==='ko-ru' ? '한 문장 말하고 멈추면 번역됩니다 🇰🇷' : 'Скажите фразу и сделайте паузу 🇷🇺';
   }
 
   async function start(){
@@ -314,7 +319,7 @@
       hint.innerHTML='<span class="err">마이크 권한이 거부되었거나 https가 아닙니다.<br>https 주소에서 권한을 허용해 주세요.</span>'; return;
     }
     wantOn=true; listening=true;
-    committedBuf=''; lastInterim='';
+    utterText=''; committed=false;
     rec=buildRec(); try{ rec.start(); }catch(_){}
     micBtn.classList.add('listening'); dot.classList.add('live');
     updateListeningBar('');
@@ -323,8 +328,10 @@
 
   function hardStop(){
     wantOn=false; listening=false;
-    flushSentence();   // commit any leftover speech
-    if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} } rec=null;
+    clearTimeout(silenceTimer);
+    if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} }
+    commitUtterance();   // commit any leftover speech once
+    rec=null;
     micBtn.classList.remove('listening'); dot.classList.remove('live');
     lbInner.classList.remove('show');
     if(!hint.querySelector('.err')) hint.textContent='말할 언어를 고르고 마이크를 누르세요';
