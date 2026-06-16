@@ -68,13 +68,19 @@
   .target { font-family:var(--font-ko); font-size:22px; line-height:1.5; font-weight:700; color:var(--text); }
   .target.loading { color:var(--text-dim); font-style:italic; font-weight:400; }
 
-  /* interim live line (current speech, not yet final) */
-  .bubble.interim { opacity:.85; border-style:dashed; }
-  .bubble.interim .target { display:none; }
-  .bubble.interim .arrow { display:none; }
-  .bubble.interim .source { color:rgba(255,255,255,0.7); font-size:17px; }
+  /* live status bar above footer: shows what is being heard right now (single line, in place) */
+  .listening-bar { flex-shrink:0; padding:0 16px; max-width:600px; margin:0 auto; width:100%; }
+  .listening-bar .lb-inner {
+    display:none; align-items:center; gap:10px; padding:12px 16px; margin-bottom:4px;
+    border-radius:16px; border:1px dashed var(--panel-border); background:rgba(255,255,255,0.03);
+  }
+  .listening-bar .lb-inner.show { display:flex; }
+  .lb-dot { width:8px; height:8px; border-radius:50%; background:#ff5a5a; flex-shrink:0; animation:pulse 1.2s infinite; }
+  .lb-text { font-family:var(--font-ko); font-size:15px; color:rgba(255,255,255,0.78); font-style:italic; line-height:1.4;
+    overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .lb-text.empty-wait { color:var(--text-dim); }
 
-  footer { flex-shrink:0; padding:14px 16px calc(16px + env(safe-area-inset-bottom));
+  footer { flex-shrink:0; padding:10px 16px calc(16px + env(safe-area-inset-bottom));
     border-top:1px solid var(--panel-border); background:rgba(7,9,15,.6); backdrop-filter:blur(12px); }
   .controls { display:flex; align-items:center; gap:12px; max-width:600px; margin:0 auto; }
   .dir-toggle { display:flex; background:var(--panel); border:1px solid var(--panel-border);
@@ -95,7 +101,7 @@
   .hint { text-align:center; font-size:12.5px; color:var(--text-dim); min-height:18px; letter-spacing:.3px; line-height:1.5; margin-top:10px; }
   .err { color:var(--ru-accent); }
 
-  /* ===== presentation mode: large stacked log, latest at bottom & emphasized ===== */
+  /* ===== presentation mode ===== */
   body.stage header { display:none; }
   body.stage main { padding:24px 20px; justify-content:flex-end; gap:18px; }
   body.stage .empty .big { font-size:clamp(30px,7vw,56px); }
@@ -104,15 +110,13 @@
   body.stage .bubble .tag { font-size:12px; margin-bottom:8px; }
   body.stage .bubble .source { font-size:clamp(15px,3.5vw,22px); margin-bottom:8px; }
   body.stage .bubble .arrow { display:none; }
-  /* past lines: dim & smaller */
-  body.stage .bubble:not(:last-child) { opacity:.32; }
+  body.stage .bubble:not(:last-child) { opacity:.3; }
   body.stage .bubble:not(:last-child) .target { font-size:clamp(20px,4.5vw,30px); font-weight:700; }
   body.stage .bubble:not(:last-child) .source { display:none; }
-  /* current line: big & bright */
   body.stage .bubble:last-child { border-left:4px solid var(--ko-accent); padding-left:18px; }
   body.stage .bubble.ru:last-child { border-left:none; border-right:4px solid var(--ru-accent); padding-right:18px; }
   body.stage .bubble:last-child .target { font-size:clamp(32px,8.5vw,68px); line-height:1.35; font-weight:900; }
-  body.stage .bubble.interim:last-child { border-style:dashed; }
+  body.stage .lb-text { font-size:clamp(16px,3.5vw,22px); }
 </style>
 </head>
 <body>
@@ -129,10 +133,17 @@
   <main id="feed">
     <div class="empty" id="empty">
       <div class="big">말하면<br>번역됩니다</div>
-      <p>말할 언어를 고르고 마이크를 누르세요.<br>이전 문장은 위에 남고, 현재 문장이 아래에 크게 표시됩니다.</p>
-      <span class="auto-badge">🎙️ 언어 선택 방식 · Выбор языка</span>
+      <p>말할 언어를 고르고 마이크를 누르세요.<br>한 문장을 말하고 잠깐 멈추면, 그때 한 덩어리로 번역됩니다.</p>
+      <span class="auto-badge">🎙️ 문장 단위 번역 · По предложениям</span>
     </div>
   </main>
+
+  <div class="listening-bar">
+    <div class="lb-inner" id="lbInner">
+      <span class="lb-dot"></span>
+      <span class="lb-text" id="lbText"></span>
+    </div>
+  </div>
 
   <footer>
     <div class="controls">
@@ -158,10 +169,16 @@
   const micBtn=document.getElementById('mic'), hint=document.getElementById('hint'), dot=document.getElementById('dot');
   const btnStage=document.getElementById('btnStage');
   const btnKoRu=document.getElementById('btnKoRu'), btnRuKo=document.getElementById('btnRuKo');
+  const lbInner=document.getElementById('lbInner'), lbText=document.getElementById('lbText');
 
   let direction='ko-ru';
   let listening=false, wantOn=false, rec=null;
-  let interimBubble=null;   // the live (not-yet-final) bubble element
+
+  // sentence buffering
+  let committedBuf='';      // finalized fragments collected since last flush
+  let lastInterim='';       // current interim tail
+  let silenceTimer=null;
+  const SILENCE_MS=1200;    // pause length that ends a sentence
 
   if (!SR) {
     hint.innerHTML='<span class="err">이 브라우저는 음성 인식을 지원하지 않습니다.<br>Chrome 또는 Edge 사용을 권장합니다.</span>';
@@ -172,10 +189,10 @@
 
   function setDirection(d){
     if(d===direction) return;
+    flushSentence(); // commit whatever is pending before switching
     direction=d;
     btnKoRu.classList.toggle('active', d==='ko-ru');
     btnRuKo.classList.toggle('active', d==='ru-ko');
-    clearInterim();
     if(listening) restart();
     else if(!hint.querySelector('.err'))
       hint.textContent = d==='ko-ru' ? '한국어로 말합니다 → 러시아어 자막' : 'Говорю по-русски → 한국어 자막';
@@ -192,11 +209,19 @@
       let interim='';
       for(let i=e.resultIndex;i<e.results.length;i++){
         const res=e.results[i];
-        if(res.isFinal){ const t=res[0].transcript.trim(); if(t) commitFinal(t); }
-        else interim+=res[0].transcript;
+        if(res.isFinal){
+          const t=res[0].transcript.trim();
+          if(t){ committedBuf += (committedBuf?' ':'') + t; }
+        } else {
+          interim += res[0].transcript;
+        }
       }
-      if(interim.trim()) updateInterim(interim);
-      else if(!interim) {} // keep last interim until final replaces it
+      lastInterim = interim.trim();
+      // show live preview = committed so far + current interim
+      const preview = (committedBuf + ' ' + lastInterim).trim();
+      updateListeningBar(preview);
+      // reset the silence timer on any speech activity
+      armSilenceTimer();
     };
 
     r.onerror=(e)=>{
@@ -209,40 +234,33 @@
     return r;
   }
 
-  function restart(){
-    if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} }
-    if(!wantOn) return;
-    rec=buildRec(); try{ rec.start(); }catch(_){}
-    setListeningHint();
+  function armSilenceTimer(){
+    clearTimeout(silenceTimer);
+    silenceTimer=setTimeout(()=>{ flushSentence(); }, SILENCE_MS);
   }
-  function setListeningHint(){
-    hint.textContent = direction==='ko-ru' ? '듣고 있습니다 🇰🇷 한국어로 말하세요' : 'Слушаю 🇷🇺 говорите по-русски';
+
+  // commit the buffered sentence as one bubble + translate
+  function flushSentence(){
+    clearTimeout(silenceTimer);
+    const text = (committedBuf + ' ' + lastInterim).trim();
+    committedBuf=''; lastInterim='';
+    updateListeningBar('');     // clear preview
+    if(!text) return;
+    commitBubble(text);
+  }
+
+  function updateListeningBar(text){
+    if(!listening){ lbInner.classList.remove('show'); return; }
+    lbInner.classList.add('show');
+    if(text){ lbText.textContent=text; lbText.classList.remove('empty-wait'); }
+    else { lbText.textContent = direction==='ko-ru'?'듣는 중…':'Слушаю…'; lbText.classList.add('empty-wait'); }
   }
 
   function ensureEmptyGone(){ if(empty&&empty.parentNode) empty.remove(); }
 
-  // live interim: a temporary bubble that shows what's being said right now
-  function updateInterim(text){
-    ensureEmptyGone();
-    const {s}=srcTgt();
-    if(!interimBubble){
-      interimBubble=document.createElement('div');
-      interimBubble.className='bubble interim '+s;
-      interimBubble.innerHTML='<div class="tag">'+(s==='ko'?'🇰🇷 한국어':'🇷🇺 Русский')+' · …</div>'+
-        '<div class="source"></div><div class="arrow"></div><div class="target"></div>';
-      feed.appendChild(interimBubble);
-    }
-    interimBubble.className='bubble interim '+s;
-    interimBubble.querySelector('.source').textContent=text;
-    feed.scrollTop=feed.scrollHeight;
-  }
-  function clearInterim(){ if(interimBubble&&interimBubble.parentNode) interimBubble.remove(); interimBubble=null; }
-
-  // final sentence: convert interim into a permanent bubble + translate
-  function commitFinal(text){
+  function commitBubble(text){
     ensureEmptyGone();
     const {s,t}=srcTgt();
-    clearInterim();
     const b=document.createElement('div');
     b.className='bubble '+s;
     b.innerHTML='<div class="tag">'+(s==='ko'?'🇰🇷 한국어':'🇷🇺 Русский')+'</div>'+
@@ -270,6 +288,16 @@
     }
   }
 
+  function restart(){
+    if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} }
+    if(!wantOn) return;
+    rec=buildRec(); try{ rec.start(); }catch(_){}
+    setListeningHint();
+  }
+  function setListeningHint(){
+    hint.textContent = direction==='ko-ru' ? '말하고 잠깐 멈추면 번역됩니다 🇰🇷' : 'Скажите и сделайте паузу 🇷🇺';
+  }
+
   async function start(){
     try{
       if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
@@ -280,16 +308,19 @@
       hint.innerHTML='<span class="err">마이크 권한이 거부되었거나 https가 아닙니다.<br>https 주소에서 권한을 허용해 주세요.</span>'; return;
     }
     wantOn=true; listening=true;
+    committedBuf=''; lastInterim='';
     rec=buildRec(); try{ rec.start(); }catch(_){}
     micBtn.classList.add('listening'); dot.classList.add('live');
+    updateListeningBar('');
     setListeningHint();
   }
 
   function hardStop(){
     wantOn=false; listening=false;
+    flushSentence();   // commit any leftover speech
     if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} } rec=null;
-    clearInterim();
     micBtn.classList.remove('listening'); dot.classList.remove('live');
+    lbInner.classList.remove('show');
     if(!hint.querySelector('.err')) hint.textContent='말할 언어를 고르고 마이크를 누르세요';
   }
 
