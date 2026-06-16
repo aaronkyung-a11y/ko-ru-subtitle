@@ -43,50 +43,36 @@
   .icon-btn:active { transform:scale(.95); }
   .icon-btn.on { color:#07090f; background:linear-gradient(120deg,var(--ko-accent),var(--ru-accent)); border-color:transparent; }
 
-  /* ===== Live caption: a single fixed panel that updates in place ===== */
-  .live-wrap { flex:1; display:flex; flex-direction:column; padding:20px 18px 8px; overflow:hidden; }
+  main { flex:1; display:flex; flex-direction:column; gap:14px; padding:16px; overflow-y:auto; scroll-behavior:smooth; }
+  main::-webkit-scrollbar { width:0; }
 
-  .live-card {
-    flex:1; display:flex; flex-direction:column; justify-content:center;
-    border-radius:24px; border:1px solid var(--panel-border); background:var(--panel);
-    backdrop-filter:blur(8px); padding:26px 24px; position:relative; overflow:hidden;
-    transition:border-color .3s, box-shadow .3s;
-  }
-  .live-card.ko { border-left:4px solid var(--ko-accent); box-shadow:inset 0 0 60px -40px var(--ko-accent); }
-  .live-card.ru { border-right:4px solid var(--ru-accent); box-shadow:inset 0 0 60px -40px var(--ru-accent); }
-
-  .lc-tag { font-family:var(--font-display); font-size:11px; letter-spacing:1.4px; text-transform:uppercase;
-    margin-bottom:14px; display:flex; align-items:center; gap:7px; }
-  .live-card.ko .lc-tag { color:var(--ko-accent); } .live-card.ru .lc-tag { color:var(--ru-accent); }
-
-  .lc-source { font-family:var(--font-ko); font-size:clamp(16px,4.5vw,22px); line-height:1.5;
-    color:var(--text-dim); font-weight:400; margin-bottom:18px; min-height:1.5em; transition:color .2s; }
-  .lc-source .partial { color:rgba(255,255,255,0.7); }
-  .lc-arrow { font-size:12px; color:var(--text-dim); letter-spacing:.8px; margin-bottom:14px; }
-  .lc-target { font-family:var(--font-ko); font-size:clamp(26px,8vw,40px); line-height:1.4;
-    font-weight:900; color:var(--text); min-height:1.4em; }
-  .lc-target.loading { color:var(--text-dim); font-style:italic; font-weight:400; font-size:clamp(18px,5vw,26px); }
-
-  .lc-placeholder { text-align:center; color:var(--text-dim); }
-  .lc-placeholder .big { font-family:var(--font-display); font-size:clamp(22px,6vw,30px); font-weight:800; line-height:1.35;
-    margin-bottom:14px; background:linear-gradient(100deg,var(--ko-accent),var(--ru-accent));
+  .empty { margin:auto; text-align:center; color:var(--text-dim); max-width:340px; padding:20px; }
+  .empty .big { font-family:var(--font-display); font-size:24px; font-weight:800; line-height:1.35; margin-bottom:16px;
+    background:linear-gradient(100deg,var(--ko-accent),var(--ru-accent));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-  .lc-placeholder p { font-size:14px; line-height:1.7; }
+  .empty p { font-size:14px; line-height:1.7; }
+  .empty .auto-badge { display:inline-block; margin-top:16px; font-family:var(--font-display); font-size:11px;
+    letter-spacing:1px; color:var(--ko-accent); border:1px solid var(--panel-border); border-radius:20px; padding:6px 14px; background:var(--panel); }
 
-  /* history toggle */
-  .hist-bar { display:flex; align-items:center; justify-content:space-between; padding:10px 4px 4px; }
-  .hist-bar button { background:none; border:none; color:var(--text-dim); font-family:var(--font-display);
-    font-size:11px; letter-spacing:.5px; cursor:pointer; display:flex; align-items:center; gap:6px; }
-  .hist-bar button .chev { transition:transform .25s; }
-  .hist-bar button.open .chev { transform:rotate(180deg); }
+  .bubble { border-radius:20px; padding:16px 18px; border:1px solid var(--panel-border);
+    background:var(--panel); backdrop-filter:blur(8px); max-width:90%;
+    animation:rise .4s cubic-bezier(.2,.8,.2,1); position:relative; transition:opacity .4s; }
+  @keyframes rise { from{opacity:0; transform:translateY(14px) scale(.98);} to{opacity:1; transform:none;} }
+  .bubble.ko { align-self:flex-start; border-left:3px solid var(--ko-accent); box-shadow:-8px 0 30px -18px var(--ko-glow); }
+  .bubble.ru { align-self:flex-end; border-right:3px solid var(--ru-accent); box-shadow:8px 0 30px -18px var(--ru-glow); }
+  .tag { font-family:var(--font-display); font-size:10px; letter-spacing:1.4px; text-transform:uppercase;
+    margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+  .bubble.ko .tag { color:var(--ko-accent); } .bubble.ru .tag { color:var(--ru-accent); }
+  .source { font-family:var(--font-ko); font-size:15px; line-height:1.55; color:var(--text-dim); margin-bottom:10px; font-weight:400; }
+  .arrow { font-size:11px; color:var(--text-dim); margin-bottom:8px; letter-spacing:.8px; }
+  .target { font-family:var(--font-ko); font-size:22px; line-height:1.5; font-weight:700; color:var(--text); }
+  .target.loading { color:var(--text-dim); font-style:italic; font-weight:400; }
 
-  .history { max-height:0; overflow-y:auto; transition:max-height .3s ease; display:flex; flex-direction:column; gap:10px; padding:0 2px; }
-  .history.open { max-height:38vh; padding-bottom:8px; }
-  .history::-webkit-scrollbar { width:0; }
-  .hrow { border-radius:14px; border:1px solid var(--panel-border); background:rgba(255,255,255,0.025); padding:11px 14px; }
-  .hrow .hsrc { font-family:var(--font-ko); font-size:12.5px; color:var(--text-dim); margin-bottom:4px; }
-  .hrow .htgt { font-family:var(--font-ko); font-size:16px; font-weight:700; color:var(--text); }
-  .hrow.ko { border-left:2px solid var(--ko-accent); } .hrow.ru { border-left:2px solid var(--ru-accent); }
+  /* interim live line (current speech, not yet final) */
+  .bubble.interim { opacity:.85; border-style:dashed; }
+  .bubble.interim .target { display:none; }
+  .bubble.interim .arrow { display:none; }
+  .bubble.interim .source { color:rgba(255,255,255,0.7); font-size:17px; }
 
   footer { flex-shrink:0; padding:14px 16px calc(16px + env(safe-area-inset-bottom));
     border-top:1px solid var(--panel-border); background:rgba(7,9,15,.6); backdrop-filter:blur(12px); }
@@ -109,15 +95,24 @@
   .hint { text-align:center; font-size:12.5px; color:var(--text-dim); min-height:18px; letter-spacing:.3px; line-height:1.5; margin-top:10px; }
   .err { color:var(--ru-accent); }
 
-  /* presentation mode: hide everything but the live target */
-  body.stage header, body.stage .hist-bar, body.stage .history { display:none; }
-  body.stage .live-wrap { padding:0; }
-  body.stage .live-card { border:none; background:transparent; box-shadow:none; border-radius:0; text-align:center; }
-  body.stage .lc-tag { justify-content:center; font-size:14px; }
-  body.stage .lc-source { text-align:center; font-size:clamp(18px,4.5vw,30px); }
-  body.stage .lc-arrow { text-align:center; }
-  body.stage .lc-target { font-size:clamp(34px,9vw,72px); }
-  body.stage .lc-placeholder .big { font-size:clamp(30px,7vw,60px); }
+  /* ===== presentation mode: large stacked log, latest at bottom & emphasized ===== */
+  body.stage header { display:none; }
+  body.stage main { padding:24px 20px; justify-content:flex-end; gap:18px; }
+  body.stage .empty .big { font-size:clamp(30px,7vw,56px); }
+  body.stage .bubble { max-width:100%; width:100%; border:none; background:transparent !important;
+    box-shadow:none !important; padding:6px 10px; align-self:stretch !important; }
+  body.stage .bubble .tag { font-size:12px; margin-bottom:8px; }
+  body.stage .bubble .source { font-size:clamp(15px,3.5vw,22px); margin-bottom:8px; }
+  body.stage .bubble .arrow { display:none; }
+  /* past lines: dim & smaller */
+  body.stage .bubble:not(:last-child) { opacity:.32; }
+  body.stage .bubble:not(:last-child) .target { font-size:clamp(20px,4.5vw,30px); font-weight:700; }
+  body.stage .bubble:not(:last-child) .source { display:none; }
+  /* current line: big & bright */
+  body.stage .bubble:last-child { border-left:4px solid var(--ko-accent); padding-left:18px; }
+  body.stage .bubble.ru:last-child { border-left:none; border-right:4px solid var(--ru-accent); padding-right:18px; }
+  body.stage .bubble:last-child .target { font-size:clamp(32px,8.5vw,68px); line-height:1.35; font-weight:900; }
+  body.stage .bubble.interim:last-child { border-style:dashed; }
 </style>
 </head>
 <body>
@@ -131,25 +126,13 @@
     </div>
   </header>
 
-  <div class="live-wrap">
-    <div class="live-card" id="liveCard">
-      <div class="lc-placeholder" id="placeholder">
-        <div class="big">말하면<br>번역됩니다</div>
-        <p>말할 언어를 고르고 마이크를 누르세요.<br>한 화면에서 자막이 실시간으로 갱신됩니다.</p>
-      </div>
-      <div id="liveContent" style="display:none;">
-        <div class="lc-tag" id="lcTag"></div>
-        <div class="lc-source" id="lcSource"></div>
-        <div class="lc-arrow" id="lcArrow"></div>
-        <div class="lc-target" id="lcTarget"></div>
-      </div>
+  <main id="feed">
+    <div class="empty" id="empty">
+      <div class="big">말하면<br>번역됩니다</div>
+      <p>말할 언어를 고르고 마이크를 누르세요.<br>이전 문장은 위에 남고, 현재 문장이 아래에 크게 표시됩니다.</p>
+      <span class="auto-badge">🎙️ 언어 선택 방식 · Выбор языка</span>
     </div>
-
-    <div class="hist-bar">
-      <button id="histToggle"><span class="chev">▾</span> <span id="histLabel">지난 기록 0</span></button>
-    </div>
-    <div class="history" id="history"></div>
-  </div>
+  </main>
 
   <footer>
     <div class="controls">
@@ -171,18 +154,14 @@
 <script>
 (function(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const feed=document.getElementById('feed'), empty=document.getElementById('empty');
   const micBtn=document.getElementById('mic'), hint=document.getElementById('hint'), dot=document.getElementById('dot');
   const btnStage=document.getElementById('btnStage');
   const btnKoRu=document.getElementById('btnKoRu'), btnRuKo=document.getElementById('btnRuKo');
-  const liveCard=document.getElementById('liveCard'), placeholder=document.getElementById('placeholder');
-  const liveContent=document.getElementById('liveContent');
-  const lcTag=document.getElementById('lcTag'), lcSource=document.getElementById('lcSource');
-  const lcArrow=document.getElementById('lcArrow'), lcTarget=document.getElementById('lcTarget');
-  const history=document.getElementById('history'), histToggle=document.getElementById('histToggle'), histLabel=document.getElementById('histLabel');
 
   let direction='ko-ru';
   let listening=false, wantOn=false, rec=null;
-  let histCount=0, translateSeq=0;
+  let interimBubble=null;   // the live (not-yet-final) bubble element
 
   if (!SR) {
     hint.innerHTML='<span class="err">이 브라우저는 음성 인식을 지원하지 않습니다.<br>Chrome 또는 Edge 사용을 권장합니다.</span>';
@@ -196,7 +175,7 @@
     direction=d;
     btnKoRu.classList.toggle('active', d==='ko-ru');
     btnRuKo.classList.toggle('active', d==='ru-ko');
-    resetLiveLabels();
+    clearInterim();
     if(listening) restart();
     else if(!hint.querySelector('.err'))
       hint.textContent = d==='ko-ru' ? '한국어로 말합니다 → 러시아어 자막' : 'Говорю по-русски → 한국어 자막';
@@ -204,33 +183,20 @@
   btnKoRu.onclick=()=>setDirection('ko-ru');
   btnRuKo.onclick=()=>setDirection('ru-ko');
 
-  function showLive(){ placeholder.style.display='none'; liveContent.style.display='block'; }
-  function resetLiveLabels(){
-    const {s}=srcTgt();
-    liveCard.className='live-card '+s;
-    lcTag.textContent = s==='ko'?'🇰🇷 한국어':'🇷🇺 Русский';
-    lcArrow.textContent = '↓ ' + (s==='ko'?'러시아어 번역':'한국어 번역');
-  }
-
   function buildRec(){
     const r=new SR();
     r.lang = direction==='ko-ru' ? 'ko-KR' : 'ru-RU';
     r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
 
     r.onresult=(e)=>{
-      let interim='', finals=[];
+      let interim='';
       for(let i=e.resultIndex;i<e.results.length;i++){
         const res=e.results[i];
-        if(res.isFinal){ const t=res[0].transcript.trim(); if(t) finals.push(t); }
+        if(res.isFinal){ const t=res[0].transcript.trim(); if(t) commitFinal(t); }
         else interim+=res[0].transcript;
       }
-      // live: show interim (partial) in the source line, in place
-      if(interim.trim()){
-        showLive(); resetLiveLabels();
-        lcSource.innerHTML='<span class="partial">'+escapeHtml(interim)+'</span>';
-      }
-      // when a sentence finalizes, lock it: translate + push to history
-      finals.forEach(commitFinal);
+      if(interim.trim()) updateInterim(interim);
+      else if(!interim) {} // keep last interim until final replaces it
     };
 
     r.onerror=(e)=>{
@@ -249,43 +215,46 @@
     rec=buildRec(); try{ rec.start(); }catch(_){}
     setListeningHint();
   }
-
   function setListeningHint(){
     hint.textContent = direction==='ko-ru' ? '듣고 있습니다 🇰🇷 한국어로 말하세요' : 'Слушаю 🇷🇺 говорите по-русски';
   }
 
+  function ensureEmptyGone(){ if(empty&&empty.parentNode) empty.remove(); }
+
+  // live interim: a temporary bubble that shows what's being said right now
+  function updateInterim(text){
+    ensureEmptyGone();
+    const {s}=srcTgt();
+    if(!interimBubble){
+      interimBubble=document.createElement('div');
+      interimBubble.className='bubble interim '+s;
+      interimBubble.innerHTML='<div class="tag">'+(s==='ko'?'🇰🇷 한국어':'🇷🇺 Русский')+' · …</div>'+
+        '<div class="source"></div><div class="arrow"></div><div class="target"></div>';
+      feed.appendChild(interimBubble);
+    }
+    interimBubble.className='bubble interim '+s;
+    interimBubble.querySelector('.source').textContent=text;
+    feed.scrollTop=feed.scrollHeight;
+  }
+  function clearInterim(){ if(interimBubble&&interimBubble.parentNode) interimBubble.remove(); interimBubble=null; }
+
+  // final sentence: convert interim into a permanent bubble + translate
   function commitFinal(text){
-    showLive(); resetLiveLabels();
+    ensureEmptyGone();
     const {s,t}=srcTgt();
-    lcSource.textContent=text;
-    lcTarget.className='lc-target loading';
-    lcTarget.textContent = s==='ko'?'번역 중…':'Перевод…';
-    const mySeq=++translateSeq;
-    translate(text,s,t).then(tr=>{
-      // only update live area if this is still the latest utterance
-      if(mySeq===translateSeq){
-        lcTarget.className='lc-target';
-        lcTarget.textContent=tr;
-      }
-      pushHistory(text,tr,s);
-    }).catch(()=>{
-      if(mySeq===translateSeq){ lcTarget.className='lc-target'; lcTarget.innerHTML='<span class="err">번역 실패</span>'; }
-      pushHistory(text,'(번역 실패)',s);
-    });
+    clearInterim();
+    const b=document.createElement('div');
+    b.className='bubble '+s;
+    b.innerHTML='<div class="tag">'+(s==='ko'?'🇰🇷 한국어':'🇷🇺 Русский')+'</div>'+
+      '<div class="source">'+escapeHtml(text)+'</div>'+
+      '<div class="arrow">↓ '+(s==='ko'?'러시아어 번역':'한국어 번역')+'</div>'+
+      '<div class="target loading">'+(s==='ko'?'번역 중…':'Перевод…')+'</div>';
+    feed.appendChild(b); feed.scrollTop=feed.scrollHeight;
+    const tEl=b.querySelector('.target');
+    translate(text,s,t)
+      .then(tr=>{ tEl.classList.remove('loading'); tEl.textContent=tr; feed.scrollTop=feed.scrollHeight; })
+      .catch(()=>{ tEl.classList.remove('loading'); tEl.innerHTML='<span class="err">번역 실패</span>'; });
   }
-
-  function pushHistory(src,tgt,s){
-    const row=document.createElement('div');
-    row.className='hrow '+s;
-    row.innerHTML='<div class="hsrc">'+escapeHtml(src)+'</div><div class="htgt">'+escapeHtml(tgt)+'</div>';
-    history.insertBefore(row, history.firstChild);
-    histCount++; histLabel.textContent='지난 기록 '+histCount;
-  }
-
-  histToggle.onclick=()=>{
-    history.classList.toggle('open');
-    histToggle.classList.toggle('open');
-  };
 
   async function translate(text,from,to){
     try{
@@ -319,6 +288,7 @@
   function hardStop(){
     wantOn=false; listening=false;
     if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} } rec=null;
+    clearInterim();
     micBtn.classList.remove('listening'); dot.classList.remove('live');
     if(!hint.querySelector('.err')) hint.textContent='말할 언어를 고르고 마이크를 누르세요';
   }
@@ -332,6 +302,7 @@
     btnStage.textContent=on?'일반 모드':'발표 모드';
     if(on&&document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
     else if(!on&&document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+    feed.scrollTop=feed.scrollHeight;
   };
 
   function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
