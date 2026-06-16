@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<!-- ko-ru-subtitle  |  v0.8  |  Aaron  |  2026-06-16
-     자동 언어 감지 모드 추가 + 마이크 켠 채 즉시 전환 + 발표 모드 하단 축소 -->
+<!-- ko-ru-subtitle  |  v0.9  |  Aaron  |  2026-06-16
+     수동 전환 버그 수정(onend 체이닝) + 발표 모드 이어보기/새로시작 선택 + 발표 모드 태그 숨김 -->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -106,13 +106,35 @@
     color:rgba(255,255,255,0.28); margin-top:8px; user-select:none; }
   .err { color:var(--ru-accent); }
 
+  /* 발표 모드 진입 선택 오버레이 */
+  .stage-choice { position:fixed; inset:0; z-index:200; display:none;
+    align-items:center; justify-content:center; padding:24px;
+    background:rgba(7,9,15,0.82); backdrop-filter:blur(10px); }
+  .stage-choice.show { display:flex; animation:fadeStage .25s ease; }
+  .sc-box { width:100%; max-width:340px; text-align:center;
+    border:1px solid var(--panel-border); border-radius:24px; padding:30px 24px;
+    background:linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); }
+  .sc-title { font-family:var(--font-display); font-weight:800; font-size:20px; margin-bottom:12px;
+    background:linear-gradient(100deg,var(--ko-accent),var(--ru-accent));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .sc-desc { font-size:14px; line-height:1.7; color:var(--text-dim); margin-bottom:22px; }
+  .sc-btns { display:flex; gap:10px; margin-bottom:14px; }
+  .sc-btns button { flex:1; border:1px solid var(--panel-border); background:var(--panel);
+    color:var(--text); font-family:var(--font-display); font-size:13px; font-weight:600;
+    padding:14px 8px; border-radius:14px; cursor:pointer; transition:.2s; }
+  .sc-btns button:active { transform:scale(.96); }
+  .sc-btns button.primary { color:#07090f; border-color:transparent;
+    background:linear-gradient(120deg,var(--ko-accent),var(--ru-accent)); }
+  .sc-cancel { background:none; border:none; color:var(--text-dim);
+    font-family:var(--font-display); font-size:11px; letter-spacing:.5px; cursor:pointer; padding:6px; }
+
   /* ===== presentation mode ===== */
   body.stage header { display:none; }
   body.stage main { padding:24px 20px; justify-content:flex-end; gap:18px; }
   body.stage .empty .big { font-size:clamp(30px,7vw,56px); }
   body.stage .bubble { max-width:100%; width:100%; border:none; background:transparent !important;
     box-shadow:none !important; padding:6px 10px; align-self:stretch !important; }
-  body.stage .bubble .tag { font-size:12px; margin-bottom:8px; }
+  body.stage .bubble .tag { display:none; }
   body.stage .bubble .source { font-size:clamp(15px,3.5vw,22px); margin-bottom:8px; }
   body.stage .bubble .arrow { display:none; }
   body.stage .bubble:not(:last-child) { opacity:.6; }
@@ -145,6 +167,18 @@
       <button class="icon-btn" id="btnStage">발표 모드</button>
     </div>
   </header>
+
+  <div class="stage-choice" id="stageChoice">
+    <div class="sc-box">
+      <div class="sc-title">발표 모드</div>
+      <div class="sc-desc">이전 대화를 이어서 볼까요,<br>아니면 새로 시작할까요?</div>
+      <div class="sc-btns">
+        <button id="scKeep">이어보기</button>
+        <button id="scNew" class="primary">새로 시작</button>
+      </div>
+      <button class="sc-cancel" id="scCancel">취소</button>
+    </div>
+  </div>
 
   <main id="feed">
     <div class="empty" id="empty">
@@ -183,7 +217,7 @@
 <script>
 (function(){
   // ===== 버전 정보 (수정 시 이 세 줄만 갱신) =====
-  const APP_VERSION = 'v0.8';
+  const APP_VERSION = 'v0.9';
   const APP_AUTHOR  = 'Aaron';
   const APP_DATE    = '2026-06-16';
   const verEl=document.getElementById('version');
@@ -353,12 +387,32 @@
   }
 
   function restart(){
-    if(rec){ try{ rec.onend=null; rec.stop(); }catch(_){} }
     if(!wantOn) return;
     curListen = listenLangForMode();
     utterText=''; committed=false;
-    rec=buildRec(); try{ rec.start(); }catch(_){}
     setListeningHint();
+
+    const startFresh=()=>{
+      rec=buildRec();
+      try{ rec.start(); }catch(_){
+        // if engine is still settling, retry shortly
+        setTimeout(()=>{ if(wantOn){ try{ rec.start(); }catch(__){} } }, 250);
+      }
+    };
+
+    if(rec){
+      // Stop the old engine and wait for it to fully end before starting a new
+      // one — mobile Chrome silently ignores start() if a session is still closing.
+      const old=rec;
+      let started=false;
+      old.onresult=null; old.onerror=null;
+      old.onend=()=>{ if(!started){ started=true; startFresh(); } };
+      try{ old.stop(); }catch(_){}
+      // fallback in case onend never fires (engine already idle)
+      setTimeout(()=>{ if(!started){ started=true; startFresh(); } }, 350);
+    } else {
+      startFresh();
+    }
   }
   function setListeningHint(){
     if(mode==='auto') hint.textContent='🔄 듣는 중 · 아무 언어나 말하고 멈추세요';
@@ -397,15 +451,37 @@
 
   micBtn.onclick=()=>{ if(listening) hardStop(); else start(); };
 
-  btnStage.onclick=()=>{
-    document.body.classList.toggle('stage');
-    const on=document.body.classList.contains('stage');
-    btnStage.classList.toggle('on',on);
-    btnStage.textContent=on?'일반 모드':'발표 모드';
-    if(on&&document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
-    else if(!on&&document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+  const stageChoice=document.getElementById('stageChoice');
+  const scKeep=document.getElementById('scKeep'), scNew=document.getElementById('scNew'), scCancel=document.getElementById('scCancel');
+
+  function hasHistory(){ return feed.querySelector('.bubble')!==null; }
+  function clearFeed(){
+    feed.querySelectorAll('.bubble').forEach(b=>b.remove());
+    if(empty && !empty.parentNode){ feed.appendChild(empty); }
+  }
+
+  function enterStage(){
+    document.body.classList.add('stage');
+    btnStage.classList.add('on'); btnStage.textContent='일반 모드';
+    if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
     feed.scrollTop=feed.scrollHeight;
+  }
+  function exitStage(){
+    document.body.classList.remove('stage');
+    btnStage.classList.remove('on'); btnStage.textContent='발표 모드';
+    if(document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+    feed.scrollTop=feed.scrollHeight;
+  }
+
+  btnStage.onclick=()=>{
+    if(document.body.classList.contains('stage')){ exitStage(); return; }
+    // entering: ask only if there is existing history
+    if(hasHistory()){ stageChoice.classList.add('show'); }
+    else { enterStage(); }
   };
+  scKeep.onclick=()=>{ stageChoice.classList.remove('show'); enterStage(); };
+  scNew.onclick =()=>{ stageChoice.classList.remove('show'); clearFeed(); enterStage(); };
+  scCancel.onclick=()=>{ stageChoice.classList.remove('show'); };
 
   function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 })();
